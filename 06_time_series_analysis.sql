@@ -1,65 +1,50 @@
 /*
 ============================================================
-NORTHWIND SQL ANALYSIS
-06 - TIME SERIES ANALYSIS
+NORTHWIND - TIME SERIES ANALYSIS
 ============================================================
 
-Topics:
-- Yearly sales
-- Monthly sales
+Purpose:
+Analyze sales trends over time.
+
+Key Concepts:
+- Yearly analysis
+- Monthly analysis
+- Quarterly analysis
 - MoM growth
 - YoY growth
-- Running yearly sales
+- Running totals
 - Moving averages
-- Year-over-year monthly comparison
+- Period comparison
+
 ============================================================
 */
 
 
-/*
-============================================================
-Q1. Total orders by year
-============================================================
-*/
+-- Q1. Total sales by year.
 
 SELECT
-    YEAR(order_date) AS order_year,
-    COUNT(*) AS total_orders
+    YEAR(o.order_date) AS order_year,
 
-FROM orders
+    ROUND(
+        SUM(
+            od.unit_price
+            * od.quantity
+            * (1 - od.discount)
+        ),
+        2
+    ) AS net_sales
 
-GROUP BY YEAR(order_date)
+FROM orders o
+
+JOIN order_details od
+    ON o.order_id = od.order_id
+
+GROUP BY YEAR(o.order_date)
 
 ORDER BY order_year;
 
 
-/*
-============================================================
-Q2. Total orders by year and month
-============================================================
-*/
-
-SELECT
-    YEAR(order_date) AS order_year,
-    MONTH(order_date) AS order_month,
-    COUNT(*) AS total_orders
-
-FROM orders
-
-GROUP BY
-    YEAR(order_date),
-    MONTH(order_date)
-
-ORDER BY
-    order_year,
-    order_month;
-
-
-/*
-============================================================
-Q3. Monthly net sales
-============================================================
-*/
+-- Q2. Total sales by year and month.
 
 SELECT
     YEAR(o.order_date) AS order_year,
@@ -88,14 +73,11 @@ ORDER BY
     order_month;
 
 
-/*
-============================================================
-Q4. Yearly net sales
-============================================================
-*/
+-- Q3. Total sales by quarter.
 
 SELECT
     YEAR(o.order_date) AS order_year,
+    QUARTER(o.order_date) AS quarter_number,
 
     ROUND(
         SUM(
@@ -111,64 +93,16 @@ FROM orders o
 JOIN order_details od
     ON o.order_id = od.order_id
 
-GROUP BY YEAR(o.order_date)
-
-ORDER BY order_year;
-
-
-/*
-============================================================
-Q5. Monthly net sales with previous month
-============================================================
-*/
-
-WITH monthly_sales AS
-(
-    SELECT
-        YEAR(o.order_date) AS order_year,
-        MONTH(o.order_date) AS order_month,
-
-        SUM(
-            od.unit_price
-            * od.quantity
-            * (1 - od.discount)
-        ) AS net_sales
-
-    FROM orders o
-
-    JOIN order_details od
-        ON o.order_id = od.order_id
-
-    GROUP BY
-        YEAR(o.order_date),
-        MONTH(o.order_date)
-)
-
-SELECT
-    order_year,
-    order_month,
-
-    ROUND(net_sales, 2) AS net_sales,
-
-    ROUND(
-        LAG(net_sales) OVER (
-            ORDER BY order_year, order_month
-        ),
-        2
-    ) AS previous_month_sales
-
-FROM monthly_sales
+GROUP BY
+    YEAR(o.order_date),
+    QUARTER(o.order_date)
 
 ORDER BY
     order_year,
-    order_month;
+    quarter_number;
 
 
-/*
-============================================================
-Q6. Month-over-month sales growth
-============================================================
-*/
+-- Q4. Month-over-month sales growth.
 
 WITH monthly_sales AS
 (
@@ -192,7 +126,7 @@ WITH monthly_sales AS
         MONTH(o.order_date)
 ),
 
-sales_comparison AS
+sales_with_previous AS
 (
     SELECT
         order_year,
@@ -200,17 +134,22 @@ sales_comparison AS
         net_sales,
 
         LAG(net_sales) OVER (
-            ORDER BY order_year, order_month
+            ORDER BY
+                order_year,
+                order_month
         ) AS previous_month_sales
 
     FROM monthly_sales
 )
 
 SELECT
-    order_year,
-    order_month,
+    order_year AS year,
+    order_month AS month,
 
-    ROUND(net_sales, 2) AS net_sales,
+    ROUND(
+        net_sales,
+        2
+    ) AS net_sales,
 
     ROUND(
         previous_month_sales,
@@ -225,18 +164,14 @@ SELECT
         2
     ) AS mom_growth_percentage
 
-FROM sales_comparison
+FROM sales_with_previous
 
 ORDER BY
-    order_year,
-    order_month;
+    year,
+    month;
 
 
-/*
-============================================================
-Q7. Year-over-year sales growth
-============================================================
-*/
+-- Q5. Year-over-year sales growth.
 
 WITH yearly_sales AS
 (
@@ -257,7 +192,7 @@ WITH yearly_sales AS
     GROUP BY YEAR(o.order_date)
 ),
 
-sales_comparison AS
+sales_with_previous AS
 (
     SELECT
         order_year,
@@ -271,9 +206,12 @@ sales_comparison AS
 )
 
 SELECT
-    order_year,
+    order_year AS year,
 
-    ROUND(net_sales, 2) AS net_sales,
+    ROUND(
+        net_sales,
+        2
+    ) AS net_sales,
 
     ROUND(
         previous_year_sales,
@@ -288,16 +226,12 @@ SELECT
         2
     ) AS yoy_growth_percentage
 
-FROM sales_comparison
+FROM sales_with_previous
 
-ORDER BY order_year;
+ORDER BY year;
 
 
-/*
-============================================================
-Q8. Three-month moving average
-============================================================
-*/
+-- Q6. Running total of monthly sales.
 
 WITH monthly_sales AS
 (
@@ -322,31 +256,33 @@ WITH monthly_sales AS
 )
 
 SELECT
-    order_year,
-    order_month,
-
-    ROUND(net_sales, 2) AS monthly_sales,
+    order_year AS year,
+    order_month AS month,
 
     ROUND(
-        AVG(net_sales) OVER (
-            ORDER BY order_year, order_month
-            ROWS BETWEEN 2 PRECEDING AND CURRENT ROW
+        net_sales,
+        2
+    ) AS monthly_sales,
+
+    ROUND(
+        SUM(net_sales) OVER (
+            ORDER BY
+                order_year,
+                order_month
+            ROWS BETWEEN UNBOUNDED PRECEDING
+                 AND CURRENT ROW
         ),
         2
-    ) AS three_month_moving_average
+    ) AS cumulative_sales
 
 FROM monthly_sales
 
 ORDER BY
-    order_year,
-    order_month;
+    year,
+    month;
 
 
-/*
-============================================================
-Q9. Cumulative sales within each year
-============================================================
-*/
+-- Q7. Running sales within each year.
 
 WITH monthly_sales AS
 (
@@ -371,10 +307,13 @@ WITH monthly_sales AS
 )
 
 SELECT
-    order_year,
-    order_month,
+    order_year AS year,
+    order_month AS month,
 
-    ROUND(net_sales, 2) AS monthly_sales,
+    ROUND(
+        net_sales,
+        2
+    ) AS monthly_sales,
 
     ROUND(
         SUM(net_sales) OVER (
@@ -384,21 +323,16 @@ SELECT
                  AND CURRENT ROW
         ),
         2
-    ) AS cumulative_yearly_sales
+    ) AS yearly_running_sales
 
 FROM monthly_sales
 
 ORDER BY
-    order_year,
-    order_month;
+    year,
+    month;
 
 
-/*
-============================================================
-Q10. Compare each month's sales with the same month
-     of the previous year
-============================================================
-*/
+-- Q8. Three-month moving average.
 
 WITH monthly_sales AS
 (
@@ -423,30 +357,34 @@ WITH monthly_sales AS
 )
 
 SELECT
-    order_year,
-    order_month,
-
-    ROUND(net_sales, 2) AS current_month_sales,
+    order_year AS year,
+    order_month AS month,
 
     ROUND(
-        LAG(net_sales, 12) OVER (
-            ORDER BY order_year, order_month
+        net_sales,
+        2
+    ) AS monthly_sales,
+
+    ROUND(
+        AVG(net_sales) OVER (
+            ORDER BY
+                order_year,
+                order_month
+            ROWS BETWEEN 2 PRECEDING
+                 AND CURRENT ROW
         ),
         2
-    ) AS same_month_previous_year
+    ) AS three_month_moving_average
 
 FROM monthly_sales
 
 ORDER BY
-    order_year,
-    order_month;
+    year,
+    month;
 
 
-/*
-============================================================
-Q11. Monthly YoY growth percentage
-============================================================
-*/
+-- Q9. Compare each month's sales against
+-- the average sales for that year.
 
 WITH monthly_sales AS
 (
@@ -468,53 +406,40 @@ WITH monthly_sales AS
     GROUP BY
         YEAR(o.order_date),
         MONTH(o.order_date)
-),
-
-year_comparison AS
-(
-    SELECT
-        order_year,
-        order_month,
-        net_sales,
-
-        LAG(net_sales, 12) OVER (
-            ORDER BY order_year, order_month
-        ) AS previous_year_sales
-
-    FROM monthly_sales
 )
 
 SELECT
-    order_year,
-    order_month,
-
-    ROUND(net_sales, 2) AS net_sales,
+    order_year AS year,
+    order_month AS month,
 
     ROUND(
-        previous_year_sales,
+        net_sales,
         2
-    ) AS previous_year_sales,
+    ) AS monthly_sales,
 
     ROUND(
-        (
-            (net_sales - previous_year_sales)
-            / NULLIF(previous_year_sales, 0)
-        ) * 100,
+        AVG(net_sales) OVER (
+            PARTITION BY order_year
+        ),
         2
-    ) AS yoy_growth_percentage
+    ) AS yearly_average_sales,
 
-FROM year_comparison
+    ROUND(
+        net_sales
+        - AVG(net_sales) OVER (
+            PARTITION BY order_year
+        ),
+        2
+    ) AS difference_from_yearly_average
+
+FROM monthly_sales
 
 ORDER BY
-    order_year,
-    order_month;
+    year,
+    month;
 
 
-/*
-============================================================
-Q12. Highest-sales month for each year
-============================================================
-*/
+-- Q10. Identify the highest-sales month in each year.
 
 WITH monthly_sales AS
 (
@@ -548,31 +473,30 @@ ranked_months AS
         DENSE_RANK() OVER (
             PARTITION BY order_year
             ORDER BY net_sales DESC
-        ) AS sales_rank
+        ) AS month_rank
 
     FROM monthly_sales
 )
 
 SELECT
-    order_year,
-    order_month,
+    order_year AS year,
+    order_month AS month,
 
-    ROUND(net_sales, 2) AS net_sales,
+    ROUND(
+        net_sales,
+        2
+    ) AS net_sales,
 
-    sales_rank
+    month_rank
 
 FROM ranked_months
 
-WHERE sales_rank = 1
+WHERE month_rank = 1
 
-ORDER BY order_year;
+ORDER BY year;
 
 
-/*
-============================================================
-Q13. Lowest-sales month for each year
-============================================================
-*/
+-- Q11. Identify the lowest-sales month in each year.
 
 WITH monthly_sales AS
 (
@@ -605,22 +529,75 @@ ranked_months AS
 
         DENSE_RANK() OVER (
             PARTITION BY order_year
-            ORDER BY net_sales ASC
-        ) AS sales_rank
+            ORDER BY net_sales
+        ) AS month_rank
 
     FROM monthly_sales
 )
 
 SELECT
-    order_year,
-    order_month,
+    order_year AS year,
+    order_month AS month,
 
-    ROUND(net_sales, 2) AS net_sales,
+    ROUND(
+        net_sales,
+        2
+    ) AS net_sales,
 
-    sales_rank
+    month_rank
 
 FROM ranked_months
 
-WHERE sales_rank = 1
+WHERE month_rank = 1
 
-ORDER BY order_year;
+ORDER BY year;
+
+
+-- Q12. Calculate yearly sales and the difference
+-- from the previous year.
+
+WITH yearly_sales AS
+(
+    SELECT
+        YEAR(o.order_date) AS order_year,
+
+        SUM(
+            od.unit_price
+            * od.quantity
+            * (1 - od.discount)
+        ) AS net_sales
+
+    FROM orders o
+
+    JOIN order_details od
+        ON o.order_id = od.order_id
+
+    GROUP BY YEAR(o.order_date)
+)
+
+SELECT
+    order_year AS year,
+
+    ROUND(
+        net_sales,
+        2
+    ) AS net_sales,
+
+    ROUND(
+        LAG(net_sales) OVER (
+            ORDER BY order_year
+        ),
+        2
+    ) AS previous_year_sales,
+
+    ROUND(
+        net_sales
+        - LAG(net_sales) OVER (
+            ORDER BY order_year
+        ),
+        2
+    ) AS sales_difference
+
+FROM yearly_sales
+
+ORDER BY year;
