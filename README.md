@@ -257,9 +257,10 @@ northwind-sql-analytics/
 ├── 01_basic_queries.sql
 ├── 02_joins_and_aggregation.sql
 ├── 03_subqueries_and_ctes.sql
-├── 04_window_functions.sql
-├── 05_time_series_analysis.sql
-├── 06_advanced_analytical_sql.sql
+├── 04_sales_analysis.sql
+├── 05_window_functions.sql
+├── 06_time_series_analysis.sql
+├── 07_advanced_analytical_sql.sql
 │
 └── insights.md
 ```
