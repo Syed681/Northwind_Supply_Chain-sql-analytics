@@ -1,22 +1,22 @@
 /*
 ============================================================
-NORTHWIND SQL ANALYSIS
-04 - SALES ANALYSIS
+NORTHWIND - SALES ANALYSIS
 ============================================================
 
-Topics:
-- Transaction-level sales calculations
-- Gross sales
-- Discount amount
-- Net sales
-- Sales by year
-- Sales by category
-- Sales by product
-- Sales by customer
-- Sales by employee
-- Top-N analysis
+Purpose:
+Analyze sales performance across orders, products,
+customers, categories, and employees.
 
-Sales formula:
+Key Concepts:
+- Revenue calculation
+- Discount analysis
+- Sales aggregation
+- Product performance
+- Customer performance
+- Category performance
+- Employee performance
+
+Sales Formula:
 
 Gross Sales
 = unit_price * quantity
@@ -31,14 +31,8 @@ Net Sales
 */
 
 
-/*
-============================================================
-Q26. SALES VALUE FOR EACH ORDER DETAIL
-============================================================
-
-Calculate gross sales, discount amount and net sales for
-every order-detail line.
-*/
+-- Q1. Calculate gross sales, discount amount and net sales
+-- for every order detail.
 
 SELECT
     od.order_id,
@@ -58,40 +52,25 @@ SELECT
     ) AS discount_amount,
 
     ROUND(
-        od.unit_price
-        * od.quantity
-        * (1 - od.discount),
+        od.unit_price * od.quantity * (1 - od.discount),
         2
     ) AS net_sales
 
 FROM order_details od;
 
 
-/*
-============================================================
-Q27. TOTAL SALES BY YEAR
-============================================================
-
-Calculate gross sales, discount amount and net sales
-for every year.
-*/
+-- Q2. Total gross sales, discount amount and net sales by year.
 
 SELECT
     YEAR(o.order_date) AS order_year,
 
     ROUND(
-        SUM(
-            od.unit_price * od.quantity
-        ),
+        SUM(od.unit_price * od.quantity),
         2
     ) AS gross_sales,
 
     ROUND(
-        SUM(
-            od.unit_price
-            * od.quantity
-            * od.discount
-        ),
+        SUM(od.unit_price * od.quantity * od.discount),
         2
     ) AS discount_amount,
 
@@ -114,13 +93,65 @@ GROUP BY YEAR(o.order_date)
 ORDER BY order_year;
 
 
-/*
-============================================================
-Q28. SALES BY CATEGORY
-============================================================
+-- Q3. Monthly net sales.
 
-Calculate net sales for every product category.
-*/
+SELECT
+    YEAR(o.order_date) AS order_year,
+    MONTH(o.order_date) AS order_month,
+
+    ROUND(
+        SUM(
+            od.unit_price
+            * od.quantity
+            * (1 - od.discount)
+        ),
+        2
+    ) AS net_sales
+
+FROM orders o
+
+JOIN order_details od
+    ON o.order_id = od.order_id
+
+GROUP BY
+    YEAR(o.order_date),
+    MONTH(o.order_date)
+
+ORDER BY
+    order_year,
+    order_month;
+
+
+-- Q4. Top 10 products by net sales.
+
+SELECT
+    p.product_id,
+    p.product_name,
+
+    ROUND(
+        SUM(
+            od.unit_price
+            * od.quantity
+            * (1 - od.discount)
+        ),
+        2
+    ) AS net_sales
+
+FROM products p
+
+JOIN order_details od
+    ON p.product_id = od.product_id
+
+GROUP BY
+    p.product_id,
+    p.product_name
+
+ORDER BY net_sales DESC
+
+LIMIT 10;
+
+
+-- Q5. Sales by category.
 
 SELECT
     c.category_id,
@@ -150,91 +181,13 @@ GROUP BY
 ORDER BY net_sales DESC;
 
 
-/*
-============================================================
-Q29. SALES BY PRODUCT
-============================================================
-
-Calculate total quantity sold and net sales for every
-product.
-*/
-
-SELECT
-    p.product_id,
-    p.product_name,
-
-    SUM(od.quantity) AS total_quantity_sold,
-
-    ROUND(
-        SUM(
-            od.unit_price
-            * od.quantity
-            * (1 - od.discount)
-        ),
-        2
-    ) AS net_sales
-
-FROM products p
-
-JOIN order_details od
-    ON p.product_id = od.product_id
-
-GROUP BY
-    p.product_id,
-    p.product_name
-
-ORDER BY net_sales DESC;
-
-
-/*
-============================================================
-Q30. TOP 10 PRODUCTS BY NET SALES
-============================================================
-*/
-
-SELECT
-    p.product_id,
-    p.product_name,
-
-    ROUND(
-        SUM(
-            od.unit_price
-            * od.quantity
-            * (1 - od.discount)
-        ),
-        2
-    ) AS net_sales
-
-FROM products p
-
-JOIN order_details od
-    ON p.product_id = od.product_id
-
-GROUP BY
-    p.product_id,
-    p.product_name
-
-ORDER BY net_sales DESC
-
-LIMIT 10;
-
-
-/*
-============================================================
-Q31. SALES BY CUSTOMER
-============================================================
-
-Calculate total orders, quantity purchased and net sales
-for each customer.
-*/
+-- Q6. Sales by customer.
 
 SELECT
     c.customer_id,
     c.company_name,
 
     COUNT(DISTINCT o.order_id) AS total_orders,
-
-    SUM(od.quantity) AS total_quantity,
 
     ROUND(
         SUM(
@@ -260,14 +213,7 @@ GROUP BY
 ORDER BY net_sales DESC;
 
 
-/*
-============================================================
-Q32. SALES BY EMPLOYEE
-============================================================
-
-Calculate total orders and net sales handled by each
-employee.
-*/
+-- Q7. Sales by employee.
 
 SELECT
     e.employee_id,
@@ -305,238 +251,10 @@ GROUP BY
 ORDER BY net_sales DESC;
 
 
-/*
-============================================================
-Q33. DISCOUNT AMOUNT BY YEAR
-============================================================
-
-Calculate the total value given away through discounts
-for each year.
-*/
-
-SELECT
-    YEAR(o.order_date) AS order_year,
-
-    ROUND(
-        SUM(
-            od.unit_price
-            * od.quantity
-            * od.discount
-        ),
-        2
-    ) AS discount_amount
-
-FROM orders o
-
-JOIN order_details od
-    ON o.order_id = od.order_id
-
-GROUP BY YEAR(o.order_date)
-
-ORDER BY order_year DESC;
-
-
-/*
-============================================================
-Q34. AVERAGE ORDER VALUE
-============================================================
-
-Calculate the average net sales value per order.
-
-Important:
-First aggregate order-detail rows to order level.
-Then calculate the average across orders.
-*/
-
-WITH order_sales AS
-(
-    SELECT
-        o.order_id,
-
-        SUM(
-            od.unit_price
-            * od.quantity
-            * (1 - od.discount)
-        ) AS order_value
-
-    FROM orders o
-
-    JOIN order_details od
-        ON o.order_id = od.order_id
-
-    GROUP BY o.order_id
-)
-
-SELECT
-    ROUND(
-        AVG(order_value),
-        2
-    ) AS average_order_value
-
-FROM order_sales;
-
-
-/*
-============================================================
-Q35. CUSTOMER AVERAGE ORDER VALUE
-============================================================
-
-Calculate the average order value for every customer.
-*/
-
-WITH order_sales AS
-(
-    SELECT
-        o.order_id,
-        o.customer_id,
-
-        SUM(
-            od.unit_price
-            * od.quantity
-            * (1 - od.discount)
-        ) AS order_value
-
-    FROM orders o
-
-    JOIN order_details od
-        ON o.order_id = od.order_id
-
-    GROUP BY
-        o.order_id,
-        o.customer_id
-)
-
-SELECT
-    c.customer_id,
-    c.company_name,
-
-    COUNT(os.order_id) AS total_orders,
-
-    ROUND(
-        AVG(os.order_value),
-        2
-    ) AS average_order_value
-
-FROM customers c
-
-JOIN order_sales os
-    ON c.customer_id = os.customer_id
-
-GROUP BY
-    c.customer_id,
-    c.company_name
-
-ORDER BY average_order_value DESC;
-
-
-/*
-============================================================
-Q36. CATEGORY DISCOUNT RATE
-============================================================
-
-Calculate gross sales, discount amount and effective
-discount percentage for every category.
-*/
-
-SELECT
-    c.category_id,
-    c.category_name,
-
-    ROUND(
-        SUM(
-            od.unit_price * od.quantity
-        ),
-        2
-    ) AS gross_sales,
-
-    ROUND(
-        SUM(
-            od.unit_price
-            * od.quantity
-            * od.discount
-        ),
-        2
-    ) AS discount_amount,
-
-    ROUND(
-        SUM(
-            od.unit_price
-            * od.quantity
-            * od.discount
-        ) * 100.0
-        / NULLIF(
-            SUM(
-                od.unit_price * od.quantity
-            ),
-            0
-        ),
-        2
-    ) AS discount_percentage
-
-FROM categories c
-
-JOIN products p
-    ON c.category_id = p.category_id
-
-JOIN order_details od
-    ON p.product_id = od.product_id
-
-GROUP BY
-    c.category_id,
-    c.category_name
-
-ORDER BY discount_percentage DESC;
-
-
-/*
-============================================================
-Q37. TOP 10 CUSTOMERS BY NET SALES
-============================================================
-*/
-
-SELECT
-    c.customer_id,
-    c.company_name,
-
-    ROUND(
-        SUM(
-            od.unit_price
-            * od.quantity
-            * (1 - od.discount)
-        ),
-        2
-    ) AS net_sales
-
-FROM customers c
-
-JOIN orders o
-    ON c.customer_id = o.customer_id
-
-JOIN order_details od
-    ON o.order_id = od.order_id
-
-GROUP BY
-    c.customer_id,
-    c.company_name
-
-ORDER BY net_sales DESC
-
-LIMIT 10;
-
-
-/*
-============================================================
-Q38. SALES BY COUNTRY
-============================================================
-
-Calculate total customers, orders and net sales by
-customer country.
-*/
+-- Q8. Sales by country.
 
 SELECT
     c.country,
-
-    COUNT(DISTINCT c.customer_id) AS total_customers,
 
     COUNT(DISTINCT o.order_id) AS total_orders,
 
@@ -562,57 +280,13 @@ GROUP BY c.country
 ORDER BY net_sales DESC;
 
 
-/*
-============================================================
-Q39. MONTHLY SALES
-============================================================
+-- Q9. Products with sales above the average product sales.
 
-Calculate monthly net sales in chronological order.
-*/
-
-SELECT
-    YEAR(o.order_date) AS order_year,
-    MONTH(o.order_date) AS order_month,
-
-    ROUND(
-        SUM(
-            od.unit_price
-            * od.quantity
-            * (1 - od.discount)
-        ),
-        2
-    ) AS net_sales
-
-FROM orders o
-
-JOIN order_details od
-    ON o.order_id = od.order_id
-
-GROUP BY
-    YEAR(o.order_date),
-    MONTH(o.order_date)
-
-ORDER BY
-    order_year,
-    order_month;
-
-
-/*
-============================================================
-Q40. HIGHEST-VALUE ORDER
-============================================================
-
-Find the order with the highest net sales value.
-
-First aggregate order-detail rows to order level.
-*/
-
-WITH order_sales AS
+WITH product_sales AS
 (
     SELECT
-        o.order_id,
-        o.customer_id,
-        o.order_date,
+        p.product_id,
+        p.product_name,
 
         SUM(
             od.unit_price
@@ -620,29 +294,89 @@ WITH order_sales AS
             * (1 - od.discount)
         ) AS net_sales
 
-    FROM orders o
+    FROM products p
 
     JOIN order_details od
-        ON o.order_id = od.order_id
+        ON p.product_id = od.product_id
 
     GROUP BY
-        o.order_id,
-        o.customer_id,
-        o.order_date
+        p.product_id,
+        p.product_name
+),
+
+average_sales AS
+(
+    SELECT
+        AVG(net_sales) AS avg_product_sales
+
+    FROM product_sales
 )
 
 SELECT
-    order_id,
-    customer_id,
-    order_date,
+    ps.product_id,
+    ps.product_name,
+
+    ROUND(
+        ps.net_sales,
+        2
+    ) AS net_sales,
+
+    ROUND(
+        a.avg_product_sales,
+        2
+    ) AS average_product_sales
+
+FROM product_sales ps
+
+CROSS JOIN average_sales a
+
+WHERE ps.net_sales > a.avg_product_sales
+
+ORDER BY ps.net_sales DESC;
+
+
+-- Q10. Category contribution to total sales.
+
+WITH category_sales AS
+(
+    SELECT
+        c.category_id,
+        c.category_name,
+
+        SUM(
+            od.unit_price
+            * od.quantity
+            * (1 - od.discount)
+        ) AS net_sales
+
+    FROM categories c
+
+    JOIN products p
+        ON c.category_id = p.category_id
+
+    JOIN order_details od
+        ON p.product_id = od.product_id
+
+    GROUP BY
+        c.category_id,
+        c.category_name
+)
+
+SELECT
+    category_id,
+    category_name,
 
     ROUND(
         net_sales,
         2
-    ) AS net_sales
+    ) AS net_sales,
 
-FROM order_sales
+    ROUND(
+        net_sales * 100.0
+        / SUM(net_sales) OVER (),
+        2
+    ) AS percentage_of_total_sales
 
-ORDER BY net_sales DESC
+FROM category_sales
 
-LIMIT 1;
+ORDER BY percentage_of_total_sales DESC;
